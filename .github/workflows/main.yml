@@ -1,28 +1,53 @@
-name: Docker Image CI
+name: Deploy to ECR
 
-on:
+on: 
   push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+    branches: [ master ]
 
 jobs:
+  
   build:
-    runs-on: ubuntu-18.04
+    
+    name: Build Image
+    runs-on: ubuntu-latest
+
+   
     steps:
-    - uses: actions/checkout@v3
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag app_image
-    - uses: actions/checkout@v3
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile_mysql --tag mysql_image
-    - uses: actions/checkout@v3
-    - name: AWS configure
-      run: aws configure set aws_access_key_id ASIAVUPO34O7V5RG3WNW && aws configure set aws_secret_access_key HmhejlWvFw125l39T8LOwVlZ/9VPYHt6WULxX+eT && aws configure set aws_session_token FwoGZXIvYXdzEIn//////////wEaDKPyz583PL8gFXWc4iLLAVGr3XDDt/mGbLUOmjXNa1wypgfeR6eDhalYBhUSy9Zzc5ohI1oB1jyayDoxy616qsevDVP1JSaqCkxa2vnVggaBSPFnhHZEBWQo1xpmxnUmPciAaSi6UVoonRNpPlL0EA93wicrTeWgP+KOUwj2AL5Bvq7HjLd0T2X6qF9ziPTB94LfD9i0zW55CpD3jTwKyf8+Fqu5xkVRgG8SvQ+4pkM45ltmyvjjcgBf1Iixftlp3GS34LzKnq7j5qZ7CYRSw0SWXp9D0PI9ddzpKL6OwpoGMi2OFWhUYufF1XABGuvaIzfodAFrmi4VRUQCN2qzsMBKJb6/4E7WUFc/h03nfxc= && export AWS_DEFAULT_REGION=us-east-1
-    - uses: actions/checkout@v3
-    - name: Login to AWS
-      run: docker login -u AWS -p $(aws ecr get-login-password --region us-east-1) 387584877503.dkr.ecr.us-east-1.amazonaws.com
-    - name: Pushing a docker image
-      run: docker tag app_image 387584877503.dkr.ecr.us-east-1.amazonaws.com/assignment1:app_image && docker push 387584877503.dkr.ecr.us-east-1.amazonaws.com/assignment1:app_image
-    - name: Pushing a docker image
-      run: docker tag mysql_image 387584877503.dkr.ecr.us-east-1.amazonaws.com/assignment1:mysql_image && docker push 387584877503.dkr.ecr.us-east-1.amazonaws.com/assignment1:mysql_image
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        AWS_REGION: us-east-1
+
+    - name: Build, test, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: assignment1ecr
+        IMAGE_TAG: v0.1
+        IMAGE_TAG1: v1.1
+        
+      run: |
+        #cd haripurushothn/Assignment2
+        #ls -ltra
+
+        # Docker build
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG --file Dockerfile .
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG1 --file Dockerfile_mysql .
+        # Unit test
+        docker run -d -p 80:8080 --name nodeapp $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker run -d -p 81:8080 --name mydb $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG1
+        docker ps
+        echo "Pause for 10 seconds to let container start"
+        sleep 10
+        
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG1
+        
+        
